@@ -5,7 +5,8 @@ declare global {interface Window {google:any;kwCareHtml:string}}
 let token='';
 const originalFetch=window.fetch.bind(window);
 window.fetch=async function(input:any,options:any={}){
- const path=typeof input==='string'?input:input.url;
+ const raw=typeof input==='string'?input:input.url||input.href;
+ const path=new URL(raw,window.location.href).pathname;
  if(!path.startsWith('/api/'))return originalFetch(input,options);
  const body=options.body?JSON.parse(options.body):{};
  const request={...body,token,route:path,method:options.method||'GET'};
