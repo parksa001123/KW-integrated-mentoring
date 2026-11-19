@@ -6,7 +6,7 @@ function setupStorage() {
     p.setProperty('DATA_SHEET_ID', book.getId());
   }
   const book = SpreadsheetApp.openById(p.getProperty('DATA_SHEET_ID'));
-  ['mentors','programs','applications','activities','sessions','challenges','audit'].forEach(name => {
+  ['mentors','programs','applications','activities','sessions','challenges','audit','users','careApplications','backupHistory'].forEach(name => {
     if (!book.getSheetByName(name)) book.insertSheet(name).appendRow(['id','json']);
   });
   if (!p.getProperty('BACKUP_FOLDER_ID')) p.setProperty('BACKUP_FOLDER_ID', DriveApp.createFolder('KW integrated mentoring backups').getId());
@@ -47,7 +47,7 @@ function limit_(key, max, seconds) {
 }
 function backup_() {
   const p=PropertiesService.getScriptProperties(), data={exportedAt:new Date().toISOString()};
-  ['mentors','programs','applications','activities','audit'].forEach(name=>data[name]=rows_(name));
+  ['mentors','programs','applications','activities','audit','careApplications','users'].forEach(name=>data[name]=rows_(name));
   const file=DriveApp.getFolderById(p.getProperty('BACKUP_FOLDER_ID')).createFile('KW-'+Date.now()+'.json',JSON.stringify(data),MimeType.PLAIN_TEXT);
   return file.getUrl();
 }
@@ -115,5 +115,23 @@ function rpc(body) {
   }catch(error){return {ok:false,error:error.message};}finally{if(lock.hasLock())lock.releaseLock();}
 }
 function doGet() {
-  return HtmlService.createHtmlOutputFromFile('Index').setTitle('KW 통합 멘토링').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  return HtmlService.createHtmlOutputFromFile('FullIndex').setTitle('KW 통합 멘토링').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
+function migrateLatestBackup_() {
+  if(Session.getActiveUser().getEmail().toLowerCase()!=='parksa001123@gmail.com')throw new Error('프로젝트 소유자 실행이 필요합니다.');
+  if(rows_('mentors').length)throw new Error('새 명단이 이미 있어 자동 이관을 중단했습니다.');
+  const folders=DriveApp.getFoldersByName('KW_CARE_멘토링_자동백업');
+  let latest=null;
+  while(folders.hasNext()) {const files=folders.next().getFiles();while(files.hasNext()){const f=files.next();if(f.getName().endsWith('.zip')&&(!latest||f.getLastUpdated()>latest.getLastUpdated()))latest=f;}}
+  if(!latest)throw new Error('기존 Drive ZIP 백업을 찾지 못했습니다.');
+  const parts=Utilities.unzip(latest.getBlob()),part=parts.find(x=>x.getName()==='전체_복구데이터.json');
+  if(!part)throw new Error('기존 백업에 전체 복구 JSON이 없습니다.');
+  const payload=JSON.parse(part.getDataAsString('UTF-8')),state=payload.state;
+  if(!state||!Array.isArray(state.mentors)||!Array.isArray(state.programs))throw new Error('백업 형식을 확인하세요.');
+  ['mentors','programs','applications','activities'].forEach(table=>(state[table]||[]).forEach(row=>put_(table,row.id,row)));
+  (payload.careApplications||[]).forEach(row=>put_('careApplications',row.requestId||row.id,row));
+  (payload.users||[]).forEach(row=>put_('users',row.email,row));
+  PropertiesService.getScriptProperties().setProperty('REVISION',String(payload.revision||0));
+  console.log(JSON.stringify({mentors:state.mentors.length,programs:state.programs.length,applications:(state.applications||[]).length,source:latest.getName()}));
+}
+function migrateBackup(){migrateLatestBackup_();}
