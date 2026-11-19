@@ -77,7 +77,9 @@ function rpc(body) {
     }
     if(action==='adminLogin') {
       limit_('admin-login',10,900);
-      const salt=p.getProperty('ADMIN_SALT'), expected=p.getProperty('ADMIN_HASH');
+      let salt=p.getProperty('ADMIN_SALT'), expected=p.getProperty('ADMIN_HASH');
+      const pending=p.getProperty('ADMIN_PASSWORD_PENDING');
+      if(!expected && pending && String(body.password||'')===pending){salt=Utilities.getUuid();expected=hash_(salt+pending);p.setProperties({ADMIN_SALT:salt,ADMIN_HASH:expected});p.deleteProperty('ADMIN_PASSWORD_PENDING');}
       if(!salt||!expected||hash_(salt+String(body.password||''))!==expected) throw new Error('관리자 인증 설정 또는 비밀번호를 확인하세요.');
       return login_({role:'admin',name:'센터 관리자'});
     }
@@ -115,7 +117,7 @@ function rpc(body) {
   }catch(error){return {ok:false,error:error.message};}finally{if(lock.hasLock())lock.releaseLock();}
 }
 function doGet() {
-  return HtmlService.createHtmlOutputFromFile('FullIndex').setTitle('KW 통합 멘토링').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  return HtmlService.createHtmlOutputFromFile('FullIndex').setTitle('KW-Integrated-mentoring').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 function migrateLatestBackup_() {
   if(Session.getActiveUser().getEmail().toLowerCase()!=='parksa001123@gmail.com')throw new Error('프로젝트 소유자 실행이 필요합니다.');
