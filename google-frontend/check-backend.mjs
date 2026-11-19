@@ -1,0 +1,15 @@
+import fs from 'node:fs';import vm from 'node:vm';import assert from 'node:assert/strict';
+const tables={mentors:[{id:'m1',name:'공개멘토',published:true,phone:'private',note:'private',availability:'가능',department:'학과',organization:'기관'},{id:'m2',published:false}],programs:[],applications:[],activities:[],audit:[],users:[],careApplications:[],backupHistory:[]};
+let revision='0';const lock={waitLock(){},hasLock(){return true},releaseLock(){}};
+const context=vm.createContext({console,Date,Set,Math,Number,String,JSON,Object,Array,Error,RegExp,Utilities:{getUuid:()=>Math.random().toString(36).slice(2)},PropertiesService:{getScriptProperties:()=>({getProperty:()=>revision,setProperty:(k,v)=>revision=v})},LockService:{getScriptLock:()=>lock},rows_:n=>tables[n]||[],session_:t=>t==='admin'?{role:'admin',email:'admin'}:t==='student'?{role:'student',email:'s@ikw.ac.kr',name:'학생',studentId:'20261111'}:null,put_:(n,id,v)=>{tables[n]??=[];const i=tables[n].findIndex(x=>x.id===id);if(i<0)tables[n].push(v);else tables[n][i]=v},backup_:()=> 'https://drive.google.com/test',rpc:()=>({ok:true})});
+vm.runInContext(fs.readFileSync('google-backend/Import.gs','utf8')+fs.readFileSync('google-backend/Api.gs','utf8'),context);
+const api=b=>context.api(b);
+const publicState=api({route:'/api/state'});assert.equal(publicState.mentors.length,1);assert.equal(publicState.mentors[0].phone,undefined);
+assert.equal(api({route:'/api/action',action:'saveMentor',revision:0,mentor:{}}).ok,false);
+const loginState=api({route:'/api/state',token:'admin'});assert.equal(loginState.mentors.length,2);
+const body={route:'/api/action',token:'student',action:'apply',revision:0,form:{type:'mentor',targetId:'m1',department:'학과',phone:'01000000000',goals:'진로와 학습 방향을 상담받고 싶습니다.',schedule:'협의',consent:true}};
+assert.equal(api(body).ok,true);assert.equal(tables.applications[0].email,'s@ikw.ac.kr');
+assert.equal(api({...body,revision:1}).ok,false);
+assert.equal(api({route:'/api/action',token:'admin',action:'saveMentor',revision:0,mentor:{}}).ok,false);
+assert.equal(api({route:'/api/care',method:'GET',token:'student'}).ok,false);
+console.log('PASS public redaction, hidden mentors, admin restriction, verified identity, duplicate prevention, revision conflict, CARE access');
