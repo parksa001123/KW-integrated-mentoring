@@ -1,0 +1,40 @@
+name: Publish Google-backed mentoring
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['pages/**', '.github/workflows/google-pages.yml']
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure public Apps Script URL
+        env:
+          APPS_SCRIPT_URL: ${{ vars.APPS_SCRIPT_URL }}
+        run: |
+          python3 - <<'PY'
+          import os,re,pathlib
+          value=os.environ.get('APPS_SCRIPT_URL','')
+          if not re.fullmatch(r'https://script\.google\.com/macros/s/[A-Za-z0-9_-]+/exec',value):
+              raise SystemExit('Set APPS_SCRIPT_URL to the separate deployed Google web app URL.')
+          p=pathlib.Path('pages/index.html')
+          p.write_text(p.read_text().replace('__APPS_SCRIPT_URL__',value))
+          PY
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
