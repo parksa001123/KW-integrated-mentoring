@@ -15,15 +15,24 @@ const { d1, r2 } = hostingConfig;
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
 const managedLinux = readExecutionProfile() === "managed-linux";
 
+const externalDatabaseId = process.env.KW_D1_DATABASE_ID;
+if (externalDatabaseId && !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(externalDatabaseId)) {
+  throw new Error("KW_D1_DATABASE_ID must be a Cloudflare D1 database UUID.");
+}
+
 const localBindingConfig = {
+  ...(externalDatabaseId ? {
+    name: "kw-integrated-mentoring",
+    vars: { KW_EXTERNAL_HOST: "1" },
+  } : {}),
   main: "./worker/index.ts",
   compatibility_flags: ["nodejs_compat"],
   d1_databases: d1
     ? [
         {
           binding: d1,
-          database_name: "site-creator-d1",
-          database_id: SITE_CREATOR_PLACEHOLDER_DATABASE_ID,
+          database_name: externalDatabaseId ? "kw-integrated-mentoring" : "site-creator-d1",
+          database_id: externalDatabaseId ?? SITE_CREATOR_PLACEHOLDER_DATABASE_ID,
         },
       ]
     : [],
