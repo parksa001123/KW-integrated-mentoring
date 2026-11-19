@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+const html=fs.readFileSync('google-backend/FullIndex.html','utf8');
+assert(!html.includes('new URL(SERVER_ENDPOINT,location.origin)'));
+const route=input=>new URL(typeof input==='string'?input:input.url||input.href,'https://google-app.local/userCodeAppPanel').pathname;
+assert.equal(route('/api/auth'),'/api/auth');
+assert.equal(route(new URL('/api/care?action=list','https://kw-copy.local')),'/api/care');
+const foreign=vm.runInNewContext('({href:"https://kw-copy.local/api/care?action=list"})');
+assert.equal(route(foreign),'/api/care');
+assert(html.includes("if(id==='adminLogin'&&currentToken)"));
+assert(html.includes("if(a.admin){currentToken='session';await loadAdminData();"));
+console.log('PASS srcdoc URL base, cross-frame URL routing, shared admin session, CARE dashboard forwarding');
